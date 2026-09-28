@@ -55,18 +55,9 @@
   <div class="grid">
     <form class="panel inputs" id="form" autocomplete="off">
       <fieldset>
-        <legend>ราคาต่อเดือน (บาท)</legend>
-        <div class="matrix">
-          <span></span><span class="h">รายเดือน</span><span class="h">จ่ายล่วงหน้า 3 เดือน</span><span class="h">จ่ายล่วงหน้า 6 เดือน</span>
-          <label class="l" for="p6m">ห้อง 6 เตียง</label>
-          <input id="p6m" type="number" step="100" min="0" aria-label="ห้อง 6 เตียง รายเดือน">
-          <input id="p6q" type="number" step="100" min="0" aria-label="ห้อง 6 เตียง จ่ายล่วงหน้า 3 เดือน">
-          <input id="p6h" type="number" step="100" min="0" aria-label="ห้อง 6 เตียง จ่ายล่วงหน้า 6 เดือน">
-          <label class="l" for="p4m">ห้อง 4 เตียง</label>
-          <input id="p4m" type="number" step="100" min="0" aria-label="ห้อง 4 เตียง รายเดือน">
-          <input id="p4q" type="number" step="100" min="0" aria-label="ห้อง 4 เตียง จ่ายล่วงหน้า 3 เดือน">
-          <input id="p4h" type="number" step="100" min="0" aria-label="ห้อง 4 เตียง จ่ายล่วงหน้า 6 เดือน">
-        </div>
+        <legend>ห้องและราคาต่อเดือน (บาท)</legend>
+        <div class="items" id="roomList"></div>
+        <button type="button" class="addbtn" id="addRoom">+ เพิ่มห้อง</button>
         <div class="row"><label for="pCare1">ค่าดูแลผู้ป่วยติดเตียง<small>พลิกตัว เช็ดตัว ป้อนอาหาร ขับถ่าย</small></label><input id="pCare1" type="number" step="500" min="0"></div>
         <div class="row"><label for="pCare2">ค่าดูแลผู้ป่วยมีสาย<small>ติดเตียง + ให้อาหารทางสาย ดูดเสมหะ ดูแลสายสวน</small></label><input id="pCare2" type="number" step="500" min="0"></div>
       </fieldset>
@@ -79,17 +70,7 @@
 
       <fieldset>
         <legend>จำนวนผู้พักตอนนี้ (คน)</legend>
-        <div class="matrix">
-          <span></span><span class="h">รายเดือน</span><span class="h">ล่วงหน้า 3 เดือน</span><span class="h">ล่วงหน้า 6 เดือน</span>
-          <span class="l">ห้อง 6 เตียง</span>
-          <input id="n6m" type="number" step="1" min="0" aria-label="ผู้พักห้อง 6 เตียง รายเดือน">
-          <input id="n6q" type="number" step="1" min="0" aria-label="ผู้พักห้อง 6 เตียง ล่วงหน้า 3 เดือน">
-          <input id="n6h" type="number" step="1" min="0" aria-label="ผู้พักห้อง 6 เตียง ล่วงหน้า 6 เดือน">
-          <span class="l">ห้อง 4 เตียง</span>
-          <input id="n4m" type="number" step="1" min="0" aria-label="ผู้พักห้อง 4 เตียง รายเดือน">
-          <input id="n4q" type="number" step="1" min="0" aria-label="ผู้พักห้อง 4 เตียง ล่วงหน้า 3 เดือน">
-          <input id="n4h" type="number" step="1" min="0" aria-label="ผู้พักห้อง 4 เตียง ล่วงหน้า 6 เดือน">
-        </div>
+        <div class="matrix" id="resMatrix"></div>
         <p class="note">ผู้พักราคาโปรใส่ในกล่อง "โปรโมชั่น" ด้านบน</p>
         <div class="row"><label for="nCare1">ในจำนวนนี้ ผู้ป่วยติดเตียง</label><input id="nCare1" type="number" step="1" min="0"></div>
         <div class="row"><label for="nCare2">ผู้ป่วยติดเตียงที่มีสาย</label><input id="nCare2" type="number" step="1" min="0"></div>
@@ -151,10 +132,7 @@
         <p class="sub">รวมอาหาร 3 มื้อและการดูแล 24 ชั่วโมง ตัวเลขเปลี่ยนตามราคาที่ตั้งไว้ด้านซ้าย</p>
         <div class="pricecard">
           <div id="pcPromos" class="pricecard"></div>
-          <div class="plans">
-            <div class="plan"><h3>ห้องรวม 6 เตียง</h3><dl id="pc6"></dl></div>
-            <div class="plan"><h3>ห้องรวม 4 เตียง</h3><dl id="pc4"></dl></div>
-          </div>
+          <div class="plans" id="pcPlans"></div>
           <ul class="extras">
             <li id="pcCare1"></li>
             <li id="pcCare2"></li>

@@ -10,19 +10,24 @@
   const num = x => { const n = parseFloat(x); return isFinite(n) && n > 0 ? n : 0; };
   const clone = o => JSON.parse(JSON.stringify(o));
 
-  const CAP6 = 6, CAP4 = 4;
   const LAST_KEY = 'kaoiyok-last-scenario';
 
   // ---------- defaults ----------
   const SCALARS = {
-    p6m:25000, p6q:23500, p6h:22500, p4m:27000, p4q:25500, p4h:24500, pCare1:4000, pCare2:6000,
-    n6m:0, n6q:3, n6h:0, n4m:0, n4q:4, n4h:0, nCare1:5, nCare2:0,
+    pCare1:4000, pCare2:6000,
+    nCare1:5, nCare2:0,
     staffN:4, staffSal:15000,
     food:4500, diaper:0, otherPct:5,
     tax:20, invest:2000000
   };
-  const INT_KEYS = ['n6m','n6q','n6h','n4m','n4q','n4h','nCare1','nCare2','staffN'];
+  const INT_KEYS = ['nCare1','nCare2','staffN'];
+  const INT_FIELDS = ['months','limit','n','beds','nm','nq','nh'];
+  const newId = () => 'r' + Math.random().toString(36).slice(2, 9);
   const DEFAULTS = Object.assign({}, SCALARS, {
+    rooms: [
+      {id:'r6', name:'ห้องรวม 6 เตียง', beds:6, pm:25000, pq:23500, ph:22500, nm:0, nq:3, nh:0},
+      {id:'r4', name:'ห้องรวม 4 เตียง', beds:4, pm:27000, pq:25500, ph:24500, nm:0, nq:4, nh:0}
+    ],
     fixed: [
       {name:'ค่าเช่า', amount:52632},
       {name:'เงินเดือนผู้จัดการ', amount:20000},
@@ -34,21 +39,49 @@
       {name:'การตลาดและโปรโมท', amount:20000}
     ],
     promos: [
-      {name:'โปรเปิดศูนย์ 3 เตียงแรก', price:19900, months:3, prepaid:true, limit:3, n6:3, n4:0, after6:23500, after4:25500}
+      {name:'โปรเปิดศูนย์ 3 เตียงแรก', price:19900, months:3, prepaid:true, limit:3, rooms:{r6:{n:3, after:23500}, r4:{n:0, after:25500}}}
     ]
   });
   const NEW_FIXED = () => ({name:'', amount:0});
-  const NEW_PROMO = () => ({name:'โปรใหม่', price:0, months:3, prepaid:true, limit:0, n6:0, n4:0, after6:SCALARS.p6q, after4:SCALARS.p4q});
+  const NEW_PROMO = () => ({name:'โปรใหม่', price:0, months:3, prepaid:true, limit:0, rooms:{}});
+  const NEW_ROOM = () => {
+    const last = state.rooms[state.rooms.length - 1] || {};
+    return {id:newId(), name:'ห้องใหม่', beds:2, pm:last.pm||0, pq:last.pq||0, ph:last.ph||0, nm:0, nq:0, nh:0};
+  };
+  // a promo's residents / after-promo price for one room (after defaults to that room's 3-month price)
+  const promoRoom = (p, r) => {
+    const e = p.rooms[r.id] || {};
+    return {n: e.n || 0, after: e.after != null ? e.after : r.pq};
+  };
+  const int = x => Math.round(num(x));
 
   function normalize(d){
-    const s = Object.assign(clone(DEFAULTS), d || {});
+    d = d || {};
+    const s = Object.assign(clone(DEFAULTS), d);
     for (const k in SCALARS) s[k] = num(s[k]);
     INT_KEYS.forEach(k => s[k] = Math.round(s[k]));
+    // older saves had fixed 6-bed / 4-bed rooms stored as flat keys
+    if (!Array.isArray(d.rooms)){
+      s.rooms = 'p6m' in d ? [
+        {id:'r6', name:'ห้องรวม 6 เตียง', beds:6, pm:d.p6m, pq:d.p6q, ph:d.p6h, nm:d.n6m, nq:d.n6q, nh:d.n6h},
+        {id:'r4', name:'ห้องรวม 4 เตียง', beds:4, pm:d.p4m, pq:d.p4q, ph:d.p4h, nm:d.n4m, nq:d.n4q, nh:d.n4h}
+      ] : clone(DEFAULTS.rooms);
+    }
+    s.rooms = s.rooms.map(r => ({id:String(r.id || newId()), name:String(r.name || ''), beds:int(r.beds),
+      pm:num(r.pm), pq:num(r.pq), ph:num(r.ph), nm:int(r.nm), nq:int(r.nq), nh:int(r.nh)}));
     s.fixed = Array.isArray(s.fixed) ? s.fixed.map(x => ({name:String(x.name||''), amount:num(x.amount)})) : clone(DEFAULTS.fixed);
-    s.promos = Array.isArray(s.promos) ? s.promos.map(p => Object.assign(NEW_PROMO(), p, {
-      name:String(p.name||''), price:num(p.price), months:Math.round(num(p.months)), prepaid:p.prepaid !== false,
-      limit:Math.round(num(p.limit)), n6:Math.round(num(p.n6)), n4:Math.round(num(p.n4)), after6:num(p.after6), after4:num(p.after4)
-    })) : clone(DEFAULTS.promos);
+    s.promos = Array.isArray(s.promos) ? s.promos.map(p => {
+      let rooms = p.rooms && typeof p.rooms === 'object' ? p.rooms
+        : {r6:{n:p.n6, after:p.after6}, r4:{n:p.n4, after:p.after4}};
+      const clean = {};
+      for (const id in rooms){
+        const e = rooms[id] || {};
+        clean[id] = {n:int(e.n)};
+        if (e.after != null) clean[id].after = num(e.after);
+      }
+      return {name:String(p.name||''), price:num(p.price), months:int(p.months), prepaid:p.prepaid !== false,
+        limit:int(p.limit), rooms:clean};
+    }) : clone(DEFAULTS.promos);
     return s;
   }
 
@@ -282,9 +315,45 @@
   // ======================================================
   function fillForm(){
     for (const k in SCALARS){ const el = $(k); if (el) el.value = state[k]; }
+    renderRoomList();
+    renderResidents();
     renderFixedList();
     renderPromoList();
     render();
+  }
+
+  const numIn = (list, i, f, v, step, label, room) =>
+    '<input type="number" data-list="' + list + '" data-i="' + i + '" data-f="' + f + '"' + (room ? ' data-room="' + esc(room) + '"' : '') +
+    ' value="' + v + '" step="' + step + '" min="0" aria-label="' + esc(label) + '">';
+  const roomName = (r, i) => r.name || ('ห้องที่ ' + (i + 1));
+
+  function renderRoomList(){
+    $('roomList').innerHTML = state.rooms.length ? state.rooms.map((r, i) =>
+      '<div class="promo-card">' +
+        '<div class="top">' +
+          '<input type="text" data-list="rooms" data-i="' + i + '" data-f="name" value="' + esc(r.name) + '" placeholder="ชื่อห้อง" aria-label="ชื่อห้อง">' +
+          '<button type="button" class="icon-btn" data-del="rooms" data-i="' + i + '" title="ลบห้อง" aria-label="ลบห้อง">×</button>' +
+        '</div>' +
+        '<div class="row"><label>จำนวนเตียง</label>' + numIn('rooms', i, 'beds', r.beds, 1, 'จำนวนเตียง ' + roomName(r, i)) + '</div>' +
+        '<div class="matrix">' +
+          '<span></span><span class="h">รายเดือน</span><span class="h">ล่วงหน้า 3 เดือน</span><span class="h">ล่วงหน้า 6 เดือน</span>' +
+          '<span class="l">ราคา / เดือน</span>' +
+          numIn('rooms', i, 'pm', r.pm, 100, roomName(r, i) + ' รายเดือน') +
+          numIn('rooms', i, 'pq', r.pq, 100, roomName(r, i) + ' จ่ายล่วงหน้า 3 เดือน') +
+          numIn('rooms', i, 'ph', r.ph, 100, roomName(r, i) + ' จ่ายล่วงหน้า 6 เดือน') +
+        '</div>' +
+      '</div>').join('') : '<p class="empty">ยังไม่มีห้อง กด "+ เพิ่มห้อง"</p>';
+  }
+
+  function renderResidents(){
+    $('resMatrix').innerHTML = state.rooms.length
+      ? '<span></span><span class="h">รายเดือน</span><span class="h">ล่วงหน้า 3 เดือน</span><span class="h">ล่วงหน้า 6 เดือน</span>' +
+        state.rooms.map((r, i) =>
+          '<span class="l">' + esc(roomName(r, i)) + '</span>' +
+          numIn('rooms', i, 'nm', r.nm, 1, 'ผู้พัก ' + roomName(r, i) + ' รายเดือน') +
+          numIn('rooms', i, 'nq', r.nq, 1, 'ผู้พัก ' + roomName(r, i) + ' ล่วงหน้า 3 เดือน') +
+          numIn('rooms', i, 'nh', r.nh, 1, 'ผู้พัก ' + roomName(r, i) + ' ล่วงหน้า 6 เดือน')).join('')
+      : '<span class="empty span3">เพิ่มห้องก่อน</span>';
   }
 
   function renderFixedList(){
@@ -297,8 +366,7 @@
   }
 
   function renderPromoList(){
-    const inp = (i, f, v, step, label) =>
-      '<input type="number" data-list="promos" data-i="' + i + '" data-f="' + f + '" value="' + v + '" step="' + step + '" min="0" aria-label="' + label + '">';
+    const inp = (i, f, v, step, label) => numIn('promos', i, f, v, step, label);
     $('promoList').innerHTML = state.promos.length ? state.promos.map((p, i) =>
       '<div class="promo-card">' +
         '<div class="top">' +
@@ -309,23 +377,34 @@
         '<div class="row"><label>ระยะเวลาโปร (เดือน)</label>' + inp(i,'months',p.months,1,'ระยะเวลาโปร') + '</div>' +
         '<label class="chk"><input type="checkbox" data-list="promos" data-i="' + i + '" data-f="prepaid"' + (p.prepaid ? ' checked' : '') + '> จ่ายล่วงหน้าทั้งก้อน</label>' +
         '<div class="row"><label>จำกัดจำนวนเตียง<small>0 = ไม่จำกัด</small></label>' + inp(i,'limit',p.limit,1,'จำกัดจำนวนเตียง') + '</div>' +
-        '<div class="matrix two">' +
-          '<span></span><span class="h">ห้อง 6 เตียง</span><span class="h">ห้อง 4 เตียง</span>' +
-          '<span class="l">ผู้พักราคาโปร (คน)</span>' + inp(i,'n6',p.n6,1,'ผู้พักโปร ห้อง 6 เตียง') + inp(i,'n4',p.n4,1,'ผู้พักโปร ห้อง 4 เตียง') +
-          '<span class="l">ราคาหลังหมดโปร<small>ต่อสัญญาหลังหมดโปร</small></span>' + inp(i,'after6',p.after6,100,'ราคาหลังหมดโปร ห้อง 6 เตียง') + inp(i,'after4',p.after4,100,'ราคาหลังหมดโปร ห้อง 4 เตียง') +
-        '</div>' +
+        (state.rooms.length ? '<div class="matrix two">' +
+          '<span></span><span class="h">ผู้พักราคาโปร (คน)</span><span class="h">ราคาหลังหมดโปร</span>' +
+          state.rooms.map((r, ri) => {
+            const e = promoRoom(p, r);
+            return '<span class="l">' + esc(roomName(r, ri)) + '</span>' +
+              numIn('promos', i, 'n', e.n, 1, 'ผู้พักโปร ' + roomName(r, ri), r.id) +
+              numIn('promos', i, 'after', e.after, 100, 'ราคาหลังหมดโปร ' + roomName(r, ri), r.id);
+          }).join('') +
+        '</div>' : '') +
       '</div>').join('') : '<p class="empty">ยังไม่มีโปร กด "+ เพิ่มโปร"</p>';
   }
 
   $('form').addEventListener('input', e => {
     const t = e.target;
     if (t.dataset.list){
-      const item = state[t.dataset.list][+t.dataset.i];
-      const f = t.dataset.f;
+      const list = t.dataset.list, f = t.dataset.f;
+      let item = state[list][+t.dataset.i];
       if (!item) return;
+      if (t.dataset.room){
+        const r = state.rooms.find(x => x.id === t.dataset.room);
+        if (!r) return;
+        item = item.rooms[r.id] || (item.rooms[r.id] = promoRoom(item, r));
+      }
       if (t.type === 'checkbox') item[f] = t.checked;
       else if (t.type === 'text') item[f] = t.value;
-      else item[f] = ['months','limit','n6','n4'].includes(f) ? Math.round(num(t.value)) : num(t.value);
+      else item[f] = INT_FIELDS.includes(f) ? int(t.value) : num(t.value);
+      // room names label the residents grid and the promo cards
+      if (list === 'rooms' && f === 'name'){ renderResidents(); renderPromoList(); }
     } else if (t.id in SCALARS){
       state[t.id] = INT_KEYS.includes(t.id) ? Math.round(num(t.value)) : num(t.value);
     } else return;
@@ -340,7 +419,11 @@
     const it = state[list][i];
     if (it && it.name && !confirm('ลบ "' + it.name + '" ?')) return;
     state[list].splice(i, 1);
-    list === 'fixed' ? renderFixedList() : renderPromoList();
+    if (list === 'rooms'){
+      state.promos.forEach(p => { delete p.rooms[it.id]; });
+      renderRoomList(); renderResidents(); renderPromoList();
+    } else if (list === 'fixed') renderFixedList();
+    else renderPromoList();
     render(); scheduleSave();
   });
   $('addFixed').addEventListener('click', () => {
@@ -350,14 +433,19 @@
     inputs[inputs.length - 1].focus();
   });
   $('addPromo').addEventListener('click', () => {
-    const p = NEW_PROMO(); p.after6 = state.p6q; p.after4 = state.p4q;
-    state.promos.push(p);
+    state.promos.push(NEW_PROMO());
     renderPromoList(); render(); scheduleSave();
     const inputs = $('promoList').querySelectorAll('.top input');
     const last = inputs[inputs.length - 1]; last.focus(); last.select();
   });
+  $('addRoom').addEventListener('click', () => {
+    state.rooms.push(NEW_ROOM());
+    renderRoomList(); renderResidents(); renderPromoList(); render(); scheduleSave();
+    const inputs = $('roomList').querySelectorAll('.top input');
+    const last = inputs[inputs.length - 1]; last.focus(); last.select();
+  });
   $('reset').addEventListener('click', () => {
-    if (!confirm('คืนค่าเริ่มต้นทั้งหมดของชุดนี้? รายการและโปรที่เพิ่มเองจะหายไป')) return;
+    if (!confirm('คืนค่าเริ่มต้นทั้งหมดของชุดนี้? ห้อง รายการ และโปรที่เพิ่มเองจะหายไป')) return;
     state = normalize(clone(DEFAULTS));
     fillForm(); scheduleSave();
   });
@@ -369,17 +457,16 @@
     const out = [];
     v.promos.forEach(p => {
       const months = p.prepaid ? p.months : 0;
-      out.push({name:p.name || 'โปร', room:'ห้อง 6 เตียง', n:p.n6, price:p.price, months, promo:true});
-      out.push({name:p.name || 'โปร', room:'ห้อง 4 เตียง', n:p.n4, price:p.price, months, promo:true});
+      v.rooms.forEach((r, ri) => out.push({name:p.name || 'โปร', room:roomName(r, ri), n:promoRoom(p, r).n, price:p.price, months, promo:true}));
     });
-    out.push(
-      {name:'รายเดือน', room:'ห้อง 6 เตียง', n:v.n6m, price:v.p6m, months:0},
-      {name:'ล่วงหน้า 3 เดือน', room:'ห้อง 6 เตียง', n:v.n6q, price:v.p6q, months:3},
-      {name:'ล่วงหน้า 6 เดือน', room:'ห้อง 6 เตียง', n:v.n6h, price:v.p6h, months:6},
-      {name:'รายเดือน', room:'ห้อง 4 เตียง', n:v.n4m, price:v.p4m, months:0},
-      {name:'ล่วงหน้า 3 เดือน', room:'ห้อง 4 เตียง', n:v.n4q, price:v.p4q, months:3},
-      {name:'ล่วงหน้า 6 เดือน', room:'ห้อง 4 เตียง', n:v.n4h, price:v.p4h, months:6}
-    );
+    v.rooms.forEach((r, ri) => {
+      const room = roomName(r, ri);
+      out.push(
+        {name:'รายเดือน', room, n:r.nm, price:r.pm, months:0},
+        {name:'ล่วงหน้า 3 เดือน', room, n:r.nq, price:r.pq, months:3},
+        {name:'ล่วงหน้า 6 เดือน', room, n:r.nh, price:r.ph, months:6}
+      );
+    });
     return out;
   }
 
@@ -418,17 +505,19 @@
     $('fixedSum').textContent = fmt(v.fixed.reduce((s,f)=>s+f.amount,0)) + ' บาท';
 
     // occupancy note
-    const promoN6 = v.promos.reduce((s,p)=>s+p.n6,0), promoN4 = v.promos.reduce((s,p)=>s+p.n4,0);
-    const nPromo = promoN6 + promoN4;
-    const in6 = promoN6 + v.n6m + v.n6q + v.n6h, in4 = promoN4 + v.n4m + v.n4q + v.n4h;
+    const cap = v.rooms.reduce((s,r)=>s+r.beds,0);
+    const inRoom = v.rooms.map(r => r.nm + r.nq + r.nh + v.promos.reduce((s,p)=>s+promoRoom(p, r).n,0));
+    const nPromo = v.promos.reduce((s,p)=>s + v.rooms.reduce((a,r)=>a+promoRoom(p, r).n,0), 0);
     const warns = [];
-    if (in6 > CAP6) warns.push('ห้อง 6 เตียงใส่ไว้ ' + in6 + ' คน เกินจำนวนเตียง');
-    if (in4 > CAP4) warns.push('ห้อง 4 เตียงใส่ไว้ ' + in4 + ' คน เกินจำนวนเตียง');
-    v.promos.forEach(p => { if (p.limit && p.n6 + p.n4 > p.limit) warns.push('"' + (p.name || 'โปร') + '" จำกัดไว้ ' + p.limit + ' เตียง แต่ใส่ผู้พัก ' + (p.n6 + p.n4) + ' คน'); });
+    v.rooms.forEach((r, ri) => { if (inRoom[ri] > r.beds) warns.push(roomName(r, ri) + ' ใส่ไว้ ' + inRoom[ri] + ' คน เกินจำนวนเตียง (' + r.beds + ')'); });
+    v.promos.forEach(p => {
+      const pn = v.rooms.reduce((a,r)=>a+promoRoom(p, r).n,0);
+      if (p.limit && pn > p.limit) warns.push('"' + (p.name || 'โปร') + '" จำกัดไว้ ' + p.limit + ' เตียง แต่ใส่ผู้พัก ' + pn + ' คน');
+    });
     if (v.nCare1 + v.nCare2 > n) warns.push('ผู้ป่วยติดเตียงรวมมากกว่าจำนวนผู้พัก ระบบนับให้ ' + n + ' คน');
     $('occNote').className = 'note num' + (warns.length ? ' warn' : '');
     $('occNote').textContent = warns.length ? warns.join(' · ')
-      : 'รวม ' + n + ' คน · ห้อง 6 เตียง ' + in6 + '/' + CAP6 + ' · ห้อง 4 เตียง ' + in4 + '/' + CAP4 + ' · ว่าง ' + Math.max(0, CAP6+CAP4-n) + ' เตียง';
+      : 'รวม ' + n + ' คน · ' + v.rooms.map((r, ri) => roomName(r, ri) + ' ' + inRoom[ri] + '/' + r.beds).join(' · ') + ' · ว่าง ' + Math.max(0, cap - n) + ' จาก ' + cap + ' เตียง';
     $('ratio').textContent = v.staffN > 0 ? 'ผู้พัก ' + n + ' คน ต่อพนักงาน ' + v.staffN + ' คน = ' + (n/v.staffN).toFixed(1) + ' : 1' : 'ยังไม่ได้ใส่จำนวนพนักงาน';
 
     // tiles
@@ -455,13 +544,12 @@
     }
 
     // promo vs after
-    const revAfter = revenue + v.promos.reduce((s,p)=>s + p.n6*(p.after6 - p.price) + p.n4*(p.after4 - p.price), 0);
+    const revAfter = revenue + v.promos.reduce((s,p)=>s + v.rooms.reduce((a,r)=>{ const e = promoRoom(p, r); return a + e.n*(e.after - p.price); }, 0), 0);
     const mA = pnl(v, n, revAfter);
     const aft = [];
     v.promos.forEach(p => {
       const parts = [];
-      if (p.n6) parts.push('ห้อง 6 เตียง ' + p.n6 + ' คน ต่อที่ ' + fmt(p.after6));
-      if (p.n4) parts.push('ห้อง 4 เตียง ' + p.n4 + ' คน ต่อที่ ' + fmt(p.after4));
+      v.rooms.forEach((r, ri) => { const e = promoRoom(p, r); if (e.n) parts.push(roomName(r, ri) + ' ' + e.n + ' คน ต่อที่ ' + fmt(e.after)); });
       if (parts.length) aft.push('"' + (p.name || 'โปร') + '" ' + fmt(p.price) + ' × ' + p.months + ' เดือน → ' + parts.join(', '));
     });
     $('cmpSub').textContent = nPromo
@@ -484,13 +572,12 @@
     $('pcPromos').innerHTML = v.promos.map(p =>
       '<div class="promo-strip"><span>' + esc(p.name || 'โปร') + (p.limit ? ' (' + p.limit + ' เตียง)' : '') + '</span><b class="num">' + fmt(p.price) + ' บาท/เดือน</b><span class="muted">' +
         (p.prepaid && p.months ? 'จ่ายล่วงหน้า ' + p.months + ' เดือน ' + fmt(p.price*p.months) + ' บาท · ' : (p.months ? p.months + ' เดือนแรก · ' : '')) +
-        'หลังหมดโปร ห้อง 6 เตียง ' + fmt(p.after6) + ' / ห้อง 4 เตียง ' + fmt(p.after4) + ' บาท/เดือน</span></div>').join('');
+        'หลังหมดโปร ' + esc(v.rooms.map((r, ri) => roomName(r, ri) + ' ' + fmt(promoRoom(p, r).after)).join(' / ')) + ' บาท/เดือน</span></div>').join('');
     const dl = (mo, q, h) =>
       '<dt>รายเดือน</dt><dd>' + fmt(mo) + '</dd>' +
       '<dt>จ่ายล่วงหน้า 3 เดือน</dt><dd>' + fmt(q) + '<span>รวม ' + fmt(q*3) + (mo>q ? ' · ประหยัด ' + fmt((mo-q)*3) : '') + '</span></dd>' +
       '<dt>จ่ายล่วงหน้า 6 เดือน</dt><dd>' + fmt(h) + '<span>รวม ' + fmt(h*6) + (mo>h ? ' · ประหยัด ' + fmt((mo-h)*6) : '') + '</span></dd>';
-    $('pc6').innerHTML = dl(v.p6m, v.p6q, v.p6h);
-    $('pc4').innerHTML = dl(v.p4m, v.p4q, v.p4h);
+    $('pcPlans').innerHTML = v.rooms.map((r, ri) => '<div class="plan"><h3>' + esc(roomName(r, ri)) + (roomName(r, ri).includes(r.beds + ' เตียง') ? '' : ' <span class="muted">(' + r.beds + ' เตียง)</span>') + '</h3><dl>' + dl(r.pm, r.pq, r.ph) + '</dl></div>').join('');
     $('pcCare1').textContent = 'ผู้ป่วยติดเตียง (พลิกตัว เช็ดตัว ป้อนอาหาร ดูแลการขับถ่าย) บวกเพิ่ม ' + fmt(v.pCare1) + ' บาท/เดือน';
     $('pcCare2').textContent = 'ผู้ป่วยติดเตียงที่มีสาย (ให้อาหารทางสาย ดูดเสมหะ ดูแลสายสวน) บวกเพิ่ม ' + fmt(v.pCare2) + ' บาท/เดือน';
 
@@ -498,7 +585,7 @@
     let r = '';
     P.forEach(p => {
       if (!p.n) return;
-      r += '<tr><td>' + p.room + ' · ' + esc(p.name) + (p.promo ? '<span class="tag promo">โปร</span>' : '') + '</td><td>' + p.n + '</td><td>' + fmt(p.price) + '</td><td>' + fmt(p.n*p.price) + '</td><td>' + (p.months ? fmt(p.n*p.price*p.months) : '<span class="muted">–</span>') + '</td></tr>';
+      r += '<tr><td>' + esc(p.room) + ' · ' + esc(p.name) + (p.promo ? '<span class="tag promo">โปร</span>' : '') + '</td><td>' + p.n + '</td><td>' + fmt(p.price) + '</td><td>' + fmt(p.n*p.price) + '</td><td>' + (p.months ? fmt(p.n*p.price*p.months) : '<span class="muted">–</span>') + '</td></tr>';
     });
     if (care1) r += '<tr><td>ค่าดูแลผู้ป่วยติดเตียง</td><td>' + care1 + '</td><td>' + fmt(v.pCare1) + '</td><td>' + fmt(care1*v.pCare1) + '</td><td><span class="muted">รายเดือน</span></td></tr>';
     if (care2) r += '<tr><td>ค่าดูแลผู้ป่วยมีสาย</td><td>' + care2 + '</td><td>' + fmt(v.pCare2) + '</td><td>' + fmt(care2*v.pCare2) + '</td><td><span class="muted">รายเดือน</span></td></tr>';
@@ -525,7 +612,6 @@
     $('breakdown').innerHTML = h;
 
     // occupancy
-    const cap = CAP6 + CAP4;
     const rows = [];
     for (let b = 1; b <= cap; b++) rows.push([b, pnl(v, b, avg*b)]);
     const mx = Math.max(...rows.map(x => Math.abs(x[1].net)), 1);
