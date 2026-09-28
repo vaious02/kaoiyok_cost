@@ -17,7 +17,7 @@
     pCare1:4000, pCare2:6000,
     nCare1:5, nCare2:0,
     staffN:4, staffSal:15000,
-    food:4500, diaper:0, otherPct:5,
+    food:4500, otherPct:5,
     tax:20, invest:2000000
   };
   const INT_KEYS = ['nCare1','nCare2','staffN'];
@@ -503,7 +503,6 @@
       .concat(v.fixed.map((f, i) => [f.name || ('รายการที่ ' + (i+1)), f.amount]));
     const fixed = fixedItems.reduce((s,x)=>s+x[1],0);
     const varItems = [['ค่าอาหาร', v.food*n]];
-    if (v.diaper > 0) varItems.push(['แพมเพิร์ส (รวมในค่าห้อง)', v.diaper*n]);
     varItems.push(['อื่นๆ '+v.otherPct+'% ของรายได้', revenue*v.otherPct/100]);
     const variable = varItems.reduce((s,x)=>s+x[1],0);
     const total = fixed + variable;
@@ -525,9 +524,9 @@
     const m = pnl(v, n, revenue);
     const avg = n ? revenue/n : 0;
     const pctO = v.otherPct/100;
-    const contrib = avg*(1-pctO) - v.food - v.diaper;
+    const contrib = avg*(1-pctO) - v.food;
     const be = contrib > 0 ? m.fixed/contrib : Infinity;
-    const minAvg = n && pctO < 1 ? (m.fixed/n + v.food + v.diaper)/(1-pctO) : Infinity;
+    const minAvg = n && pctO < 1 ? (m.fixed/n + v.food)/(1-pctO) : Infinity;
 
     $('fixedSum').textContent = fmt(v.fixed.reduce((s,f)=>s+f.amount,0)) + ' บาท';
 
