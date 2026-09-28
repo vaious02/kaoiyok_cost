@@ -170,6 +170,8 @@ input[type=text]:focus,input[type=email]:focus,input[type=password]:focus,select
 .promo-card .top{display:grid;grid-template-columns:minmax(0,1fr) 30px;gap:8px}
 .promo-card .top input{font-family:var(--display);font-weight:600}
 .promo-card .row{grid-template-columns:1fr 110px}
+.promo-card select{width:100%;padding:6px 8px;font-size:13.5px}
+.promo-card .row:has(select){grid-template-columns:1fr 170px}
 .promo-card input[type=number]{background:var(--surface)}
 .promo-card .chk{display:flex;gap:8px;align-items:center;font-size:14px}
 .promo-card .chk input{width:16px;height:16px;accent-color:var(--accent)}

@@ -39,20 +39,22 @@
       {name:'การตลาดและโปรโมท', amount:20000}
     ],
     promos: [
-      {name:'โปรเปิดศูนย์ 3 เตียงแรก', months:3, prepaid:true, limit:3, rooms:{r6:{n:3, price:19900, after:23500}, r4:{n:0, price:19900, after:25500}}}
+      {name:'โปรเปิดศูนย์', months:3, prepaid:true, limit:3, afterPlan:'q', rooms:{r6:{n:3, price:19900}, r4:{n:0, price:19900}}}
     ]
   });
   const NEW_FIXED = () => ({name:'', amount:0});
-  const NEW_PROMO = () => ({name:'โปรใหม่', months:3, prepaid:true, limit:0, rooms:{}});
+  const NEW_PROMO = () => ({name:'โปรใหม่', months:3, prepaid:true, limit:0, afterPlan:'q', rooms:{}});
+  // which normal room price promo residents continue on after the promo ends
+  const AFTER_PLANS = {m:'รายเดือน', q:'จ่ายล่วงหน้า 3 เดือน', h:'จ่ายล่วงหน้า 6 เดือน'};
   const NEW_ROOM = () => {
     const last = state.rooms[state.rooms.length - 1] || {};
     return {id:newId(), name:'ห้องใหม่', beds:2, pm:last.pm||0, pq:last.pq||0, ph:last.ph||0, nm:0, nq:0, nh:0};
   };
-  // a promo's residents, promo price and after-promo price for one room
-  // (after-promo price defaults to that room's 3-month price)
+  // a promo's residents and promo price for one room; the after-promo price
+  // follows that room's normal price for the promo's chosen plan
   const promoRoom = (p, r) => {
     const e = p.rooms[r.id] || {};
-    return {n: e.n || 0, price: e.price || 0, after: e.after != null ? e.after : r.pq};
+    return {n: e.n || 0, price: e.price || 0, after: r['p' + p.afterPlan] || 0};
   };
   const int = x => Math.round(num(x));
 
@@ -78,15 +80,20 @@
       for (const id in rooms){
         const e = rooms[id] || {};
         clean[id] = {n:int(e.n)};
-        if (e.after != null) clean[id].after = num(e.after);
         if (e.price != null) clean[id].price = num(e.price);
+      }
+      // older saves typed an after-promo price per room: pick the plan whose price matches
+      let afterPlan = AFTER_PLANS[p.afterPlan] ? p.afterPlan : null;
+      if (!afterPlan){
+        const typed = s.rooms.map(r => [r, rooms[r.id] && rooms[r.id].after]).filter(x => x[1] != null);
+        afterPlan = ['q','m','h'].find(k => typed.length && typed.every(([r, a]) => num(a) === r['p' + k])) || 'q';
       }
       // older saves had one promo price for every room
       if (p.price != null) s.rooms.forEach(r => {
         const e = clean[r.id] || (clean[r.id] = {n:0});
         if (e.price == null) e.price = num(p.price);
       });
-      return {name:String(p.name||''), months:int(p.months), prepaid:p.prepaid !== false, limit:int(p.limit), rooms:clean};
+      return {name:String(p.name||''), months:int(p.months), prepaid:p.prepaid !== false, limit:int(p.limit), afterPlan, rooms:clean};
     }) : clone(DEFAULTS.promos);
     return s;
   }
@@ -382,14 +389,17 @@
         '<div class="row"><label>ระยะเวลาโปร (เดือน)</label>' + inp(i,'months',p.months,1,'ระยะเวลาโปร') + '</div>' +
         '<label class="chk"><input type="checkbox" data-list="promos" data-i="' + i + '" data-f="prepaid"' + (p.prepaid ? ' checked' : '') + '> จ่ายล่วงหน้าทั้งก้อน</label>' +
         '<div class="row"><label>จำกัดจำนวนเตียง<small>0 = ไม่จำกัด</small></label>' + inp(i,'limit',p.limit,1,'จำกัดจำนวนเตียง') + '</div>' +
-        (state.rooms.length ? '<div class="matrix">' +
-          '<span></span><span class="h">ราคาโปร / เดือน</span><span class="h">ผู้พักโปร (คน)</span><span class="h">หลังหมดโปร</span>' +
+        '<div class="row"><label>หลังหมดโปรต่อสัญญาแบบ<small>ใช้ราคาปกติของแต่ละห้อง</small></label>' +
+          '<select data-list="promos" data-i="' + i + '" data-f="afterPlan" aria-label="หลังหมดโปรต่อสัญญาแบบ">' +
+          Object.keys(AFTER_PLANS).map(k => '<option value="' + k + '"' + (p.afterPlan === k ? ' selected' : '') + '>' + AFTER_PLANS[k] + '</option>').join('') +
+          '</select></div>' +
+        (state.rooms.length ? '<div class="matrix two">' +
+          '<span></span><span class="h">ราคาโปร / เดือน</span><span class="h">ผู้พักโปร (คน)</span>' +
           state.rooms.map((r, ri) => {
             const e = promoRoom(p, r);
-            return '<span class="l">' + esc(roomName(r, ri)) + '</span>' +
+            return '<span class="l">' + esc(roomName(r, ri)) + '<small data-after="' + esc(r.id) + '">หลังหมดโปร ' + fmt(e.after) + '</small></span>' +
               numIn('promos', i, 'price', e.price, 100, 'ราคาโปร ' + roomName(r, ri), r.id) +
-              numIn('promos', i, 'n', e.n, 1, 'ผู้พักโปร ' + roomName(r, ri), r.id) +
-              numIn('promos', i, 'after', e.after, 100, 'ราคาหลังหมดโปร ' + roomName(r, ri), r.id);
+              numIn('promos', i, 'n', e.n, 1, 'ผู้พักโปร ' + roomName(r, ri), r.id);
           }).join('') +
         '</div>' : '') +
       '</div>').join('') : '<p class="empty">ยังไม่มีโปร กด "+ เพิ่มโปร"</p>';
@@ -404,19 +414,30 @@
       if (t.dataset.room){
         const r = state.rooms.find(x => x.id === t.dataset.room);
         if (!r) return;
-        item = item.rooms[r.id] || (item.rooms[r.id] = promoRoom(item, r));
+        item = item.rooms[r.id] || (item.rooms[r.id] = {n:0, price:0});
       }
       if (t.type === 'checkbox') item[f] = t.checked;
-      else if (t.type === 'text') item[f] = t.value;
+      else if (t.type === 'text' || t.tagName === 'SELECT') item[f] = t.value;
       else item[f] = INT_FIELDS.includes(f) ? int(t.value) : num(t.value);
       // room names label the residents grid and the promo cards
       if (list === 'rooms' && f === 'name'){ renderResidents(); renderPromoList(); }
+      // after-promo hints follow the plan choice and the rooms' normal prices
+      if ((list === 'promos' && f === 'afterPlan') || (list === 'rooms' && /^p[mqh]$/.test(f))) refreshAfterHints();
     } else if (t.id in SCALARS){
       state[t.id] = INT_KEYS.includes(t.id) ? Math.round(num(t.value)) : num(t.value);
     } else return;
     render();
     scheduleSave();
   });
+  function refreshAfterHints(){
+    $('promoList').querySelectorAll('.promo-card').forEach((card, i) => {
+      const p = state.promos[i];
+      card.querySelectorAll('[data-after]').forEach(el => {
+        const r = state.rooms.find(x => x.id === el.dataset.after);
+        if (p && r) el.textContent = 'หลังหมดโปร ' + fmt(promoRoom(p, r).after);
+      });
+    });
+  }
   $('form').addEventListener('submit', e => e.preventDefault());
   $('form').addEventListener('click', e => {
     const b = e.target.closest('[data-del]');
