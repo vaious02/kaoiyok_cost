@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ต้นทุนต่อเตียง เก้าอี้โยก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<section class="auth" id="authView" hidden>
+  <form class="panel" id="authForm" autocomplete="on">
+    <div>
+      <div class="eyebrow">KAO I YOK · ศูนย์ดูแลผู้สูงอายุ</div>
+      <h1 id="authTitle">เข้าสู่ระบบ</h1>
+    </div>
+    <label>อีเมล<input type="email" id="authEmail" required autocomplete="email"></label>
+    <label>รหัสผ่าน<input type="password" id="authPass" required minlength="6" autocomplete="current-password"></label>
+    <div class="msg" id="authMsg" hidden></div>
+    <button class="btn primary" type="submit" id="authSubmit">เข้าสู่ระบบ</button>
+    <div class="switch" id="authSwitch">ยังไม่มีบัญชี? <button type="button" class="linkbtn" id="toSignup">สมัครสมาชิก</button></div>
+    <div class="switch"><button type="button" class="linkbtn" id="forgot">ลืมรหัสผ่าน</button></div>
+  </form>
+</section>
+
+<!-- ============ APP ============ -->
+<div class="wrap" id="appView" hidden>
+  <div class="toolbar">
+    <select id="scenarioSel" aria-label="เลือกชุดการคำนวณ"></select>
+    <button class="btn sm" type="button" id="scNew">+ ชุดใหม่</button>
+    <button class="btn sm" type="button" id="scCopy">ทำสำเนา</button>
+    <button class="btn sm" type="button" id="scRename">เปลี่ยนชื่อ</button>
+    <button class="btn sm danger" type="button" id="scDelete">ลบ</button>
+    <span class="status" id="saveStatus"></span>
+    <span class="sp"></span>
+    <span class="who" id="who"></span>
+    <button class="btn sm" type="button" id="logout">ออกจากระบบ</button>
+  </div>
+
+  <header>
+    <div>
+      <div class="eyebrow">KAO I YOK · ศูนย์ดูแลผู้สูงอายุ</div>
+      <h1>ราคา โปร และกำไรต่อเตียง</h1>
+      <p>ตั้งราคา โปร และต้นทุนคงที่ ตัวเลขฝั่งขวาคำนวณใหม่ทันทีและบันทึกลงระบบอัตโนมัติ (ต่อเดือน)</p>
+    </div>
+    <button class="btn" id="reset" type="button">คืนค่าเริ่มต้น</button>
+  </header>
+
+  <div class="grid">
+    <form class="panel inputs" id="form" autocomplete="off">
+      <fieldset>
+        <legend>ราคาต่อเดือน (บาท)</legend>
+        <div class="matrix">
+          <span></span><span class="h">รายเดือน</span><span class="h">จ่ายล่วงหน้า 3 เดือน</span><span class="h">จ่ายล่วงหน้า 6 เดือน</span>
+          <label class="l" for="p6m">ห้อง 6 เตียง</label>
+          <input id="p6m" type="number" step="100" min="0" aria-label="ห้อง 6 เตียง รายเดือน">
+          <input id="p6q" type="number" step="100" min="0" aria-label="ห้อง 6 เตียง จ่ายล่วงหน้า 3 เดือน">
+          <input id="p6h" type="number" step="100" min="0" aria-label="ห้อง 6 เตียง จ่ายล่วงหน้า 6 เดือน">
+          <label class="l" for="p4m">ห้อง 4 เตียง</label>
+          <input id="p4m" type="number" step="100" min="0" aria-label="ห้อง 4 เตียง รายเดือน">
+          <input id="p4q" type="number" step="100" min="0" aria-label="ห้อง 4 เตียง จ่ายล่วงหน้า 3 เดือน">
+          <input id="p4h" type="number" step="100" min="0" aria-label="ห้อง 4 เตียง จ่ายล่วงหน้า 6 เดือน">
+        </div>
+        <div class="row"><label for="pCare1">ค่าดูแลผู้ป่วยติดเตียง<small>พลิกตัว เช็ดตัว ป้อนอาหาร ขับถ่าย</small></label><input id="pCare1" type="number" step="500" min="0"></div>
+        <div class="row"><label for="pCare2">ค่าดูแลผู้ป่วยมีสาย<small>ติดเตียง + ให้อาหารทางสาย ดูดเสมหะ ดูแลสายสวน</small></label><input id="pCare2" type="number" step="500" min="0"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>โปรโมชั่น</legend>
+        <div class="items" id="promoList"></div>
+        <button type="button" class="addbtn" id="addPromo">+ เพิ่มโปร</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>จำนวนผู้พักตอนนี้ (คน)</legend>
+        <div class="matrix">
+          <span></span><span class="h">รายเดือน</span><span class="h">ล่วงหน้า 3 เดือน</span><span class="h">ล่วงหน้า 6 เดือน</span>
+          <span class="l">ห้อง 6 เตียง</span>
+          <input id="n6m" type="number" step="1" min="0" aria-label="ผู้พักห้อง 6 เตียง รายเดือน">
+          <input id="n6q" type="number" step="1" min="0" aria-label="ผู้พักห้อง 6 เตียง ล่วงหน้า 3 เดือน">
+          <input id="n6h" type="number" step="1" min="0" aria-label="ผู้พักห้อง 6 เตียง ล่วงหน้า 6 เดือน">
+          <span class="l">ห้อง 4 เตียง</span>
+          <input id="n4m" type="number" step="1" min="0" aria-label="ผู้พักห้อง 4 เตียง รายเดือน">
+          <input id="n4q" type="number" step="1" min="0" aria-label="ผู้พักห้อง 4 เตียง ล่วงหน้า 3 เดือน">
+          <input id="n4h" type="number" step="1" min="0" aria-label="ผู้พักห้อง 4 เตียง ล่วงหน้า 6 เดือน">
+        </div>
+        <p class="note">ผู้พักราคาโปรใส่ในกล่อง "โปรโมชั่น" ด้านบน</p>
+        <div class="row"><label for="nCare1">ในจำนวนนี้ ผู้ป่วยติดเตียง</label><input id="nCare1" type="number" step="1" min="0"></div>
+        <div class="row"><label for="nCare2">ผู้ป่วยติดเตียงที่มีสาย</label><input id="nCare2" type="number" step="1" min="0"></div>
+        <div class="note num" id="occNote"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>พนักงาน</legend>
+        <div class="row"><label for="staffN">จำนวนพนักงานดูแล<small>Nurse / NA / CG / แม่บ้าน</small></label><input id="staffN" type="number" step="1" min="0"></div>
+        <div class="row"><label for="staffSal">เงินเดือน / คน</label><input id="staffSal" type="number" step="500" min="0"></div>
+        <div class="note num" id="ratio"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>ต้นทุนต่อผู้พัก 1 คน</legend>
+        <div class="row"><label for="food">ค่าอาหาร</label><input id="food" type="number" step="100" min="0"></div>
+        <div class="row"><label for="diaper">แพมเพิร์สที่รวมในค่าห้อง<small>ใส่ 0 ถ้าเก็บแยกเท่าทุน</small></label><input id="diaper" type="number" step="100" min="0"></div>
+        <div class="row"><label for="otherPct">อื่นๆ (% ของรายได้)</label><input id="otherPct" type="number" step="0.5" min="0"></div>
+        <div class="note">แพมเพิร์ส (เหมา 1,500 บาท/เดือน) ค่าเวชภัณฑ์ และยา เก็บแยกตามใช้จริง จึงไม่นับเป็นรายได้หรือต้นทุนในหน้านี้</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>ต้นทุนคงที่ / เดือน</legend>
+        <div class="items" id="fixedList"></div>
+        <button type="button" class="addbtn" id="addFixed">+ เพิ่มรายการ</button>
+        <div class="sumline"><span>รวม (ไม่รวมเงินเดือนพนักงานดูแล)</span><b id="fixedSum"></b></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>ภาษีและเงินลงทุน</legend>
+        <div class="row"><label for="tax">ภาษี (% ของกำไร)</label><input id="tax" type="number" step="1" min="0"></div>
+        <div class="row"><label for="invest">เงินลงทุน</label><input id="invest" type="number" step="100000" min="0"></div>
+      </fieldset>
+    </form>
+
+    <div class="results">
+      <div class="tiles">
+        <div class="tile primary"><span class="k">ต้นทุน / ผู้พัก</span><span class="v" id="tCost"></span><span class="s" id="tCostS"></span></div>
+        <div class="tile"><span class="k">กำไรสุทธิ / เดือน</span><span class="v" id="tNet"></span><span class="s" id="tNetS"></span></div>
+        <div class="tile"><span class="k">รับเงินล่วงหน้าเข้ามา</span><span class="v" id="tCash"></span><span class="s" id="tCashS"></span></div>
+        <div class="tile"><span class="k">จุดคุ้มทุน</span><span class="v" id="tBE"></span><span class="s" id="tBES"></span></div>
+      </div>
+
+      <div class="verdict" id="verdict"><span class="pill" id="vPill"></span><p id="vText"></p></div>
+
+      <section class="panel section">
+        <h2>ช่วงโปร เทียบกับหลังหมดโปร</h2>
+        <p class="sub" id="cmpSub"></p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>ต่อเดือน</th><th>ช่วงโปร</th><th>หลังหมดโปร</th><th>ต่างกัน</th></tr></thead>
+            <tbody id="cmp"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>ตารางราคาสำหรับลูกค้า</h2>
+        <p class="sub">รวมอาหาร 3 มื้อและการดูแล 24 ชั่วโมง ตัวเลขเปลี่ยนตามราคาที่ตั้งไว้ด้านซ้าย</p>
+        <div class="pricecard">
+          <div id="pcPromos" class="pricecard"></div>
+          <div class="plans">
+            <div class="plan"><h3>ห้องรวม 6 เตียง</h3><dl id="pc6"></dl></div>
+            <div class="plan"><h3>ห้องรวม 4 เตียง</h3><dl id="pc4"></dl></div>
+          </div>
+          <ul class="extras">
+            <li id="pcCare1"></li>
+            <li id="pcCare2"></li>
+            <li>แพมเพิร์ส เหมา 1,500 บาท/เดือน (4 แผ่น/วัน) หรือคิดตามใช้จริง</li>
+            <li>อาหารทางสายสูตรสำเร็จ สาย ท่อ ชุดให้อาหาร ค่าเวชภัณฑ์ และยา คิดตามใช้จริง</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>รายได้แยกตามแบบที่จ่าย</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>แบบ</th><th>คน</th><th>ราคา/เดือน</th><th>รายได้/เดือน</th><th>จ่ายล่วงหน้ารวม</th></tr></thead>
+            <tbody id="revenue"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>ต้นทุนแยกรายการ</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>รายการ</th><th>ต่อเดือน</th><th>ต่อผู้พัก</th><th>% รายได้</th><th></th></tr></thead>
+            <tbody id="breakdown"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>ถ้าจำนวนผู้พักเปลี่ยน</h2>
+        <p class="sub">ใช้รายได้เฉลี่ยต่อคนเท่ากับตอนนี้ และพนักงานกับต้นทุนคงที่ชุดเดิม</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>ผู้พัก</th><th>รายได้</th><th>ต้นทุนรวม</th><th>ต้นทุน / คน</th><th>กำไรสุทธิ</th><th></th></tr></thead>
+            <tbody id="occ"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <details>
+          <summary>สูตรที่ใช้คำนวณ</summary>
+          <div class="formulas">
+            <div><b>รายได้ค่าห้อง</b><code>Σ (จำนวนผู้พักแต่ละแบบ × ราคาต่อเดือนของแบบนั้น) รวมผู้พักราคาโปร</code></div>
+            <div><b>รายได้ค่าดูแล</b><code>ผู้ป่วยติดเตียง × ค่าดูแลติดเตียง + ผู้ป่วยมีสาย × ค่าดูแลผู้ป่วยมีสาย</code></div>
+            <div><b>รายได้รวม</b><code>รายได้ค่าห้อง + รายได้ค่าดูแล</code></div>
+            <div><b>ต้นทุนคงที่</b><code>(พนักงาน × เงินเดือน) + Σ รายการต้นทุนคงที่ที่เพิ่มเอง</code></div>
+            <div><b>ต้นทุนผันแปร</b><code>ผู้พัก × (อาหาร + แพมเพิร์สที่รวมในค่าห้อง) + อื่นๆ % × รายได้รวม</code></div>
+            <div><b>ต้นทุน / ผู้พัก</b><code>(ต้นทุนคงที่ + ต้นทุนผันแปร) ÷ จำนวนผู้พัก</code></div>
+            <div><b>EBIT</b><code>รายได้รวม − ต้นทุนคงที่ − ต้นทุนผันแปร</code></div>
+            <div><b>กำไรสุทธิ</b><code>EBIT − ภาษี % × EBIT (คิดภาษีเฉพาะเมื่อ EBIT เป็นบวก)</code></div>
+            <div><b>รายได้เฉลี่ย / คน</b><code>รายได้รวม ÷ จำนวนผู้พัก</code></div>
+            <div><b>จุดคุ้มทุน (คน)</b><code>ต้นทุนคงที่ ÷ (รายได้เฉลี่ย/คน × (1 − อื่นๆ %) − อาหาร − แพมเพิร์ส)</code></div>
+            <div><b>รายได้เฉลี่ยขั้นต่ำ / คน</b><code>(ต้นทุนคงที่ ÷ ผู้พัก + อาหาร + แพมเพิร์ส) ÷ (1 − อื่นๆ %)</code></div>
+            <div><b>รายได้หลังหมดโปร</b><code>รายได้รวม + Σ ผู้พักโปรแต่ละห้อง × (ราคาหลังหมดโปรของห้องนั้น − ราคาโปร)</code></div>
+            <div><b>เงินรับล่วงหน้า</b><code>Σ ผู้พักแบบล่วงหน้า × ราคา × จำนวนเดือน (โปรที่ติ๊ก "จ่ายล่วงหน้า" นับด้วย ค่าติดเตียงเก็บรายเดือน)</code></div>
+            <div><b>ระยะคืนทุน</b><code>เงินลงทุน ÷ กำไรสุทธิต่อเดือน</code></div>
+          </div>
+        </details>
+      </section>
+      <footer>ข้อมูลแต่ละชุดการคำนวณบันทึกไว้ในบัญชีของคุณ (Supabase) เปิดจากเครื่องไหนก็เห็นเหมือนกัน</footer>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
