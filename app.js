@@ -39,19 +39,20 @@
       {name:'การตลาดและโปรโมท', amount:20000}
     ],
     promos: [
-      {name:'โปรเปิดศูนย์ 3 เตียงแรก', price:19900, months:3, prepaid:true, limit:3, rooms:{r6:{n:3, after:23500}, r4:{n:0, after:25500}}}
+      {name:'โปรเปิดศูนย์ 3 เตียงแรก', months:3, prepaid:true, limit:3, rooms:{r6:{n:3, price:19900, after:23500}, r4:{n:0, price:19900, after:25500}}}
     ]
   });
   const NEW_FIXED = () => ({name:'', amount:0});
-  const NEW_PROMO = () => ({name:'โปรใหม่', price:0, months:3, prepaid:true, limit:0, rooms:{}});
+  const NEW_PROMO = () => ({name:'โปรใหม่', months:3, prepaid:true, limit:0, rooms:{}});
   const NEW_ROOM = () => {
     const last = state.rooms[state.rooms.length - 1] || {};
     return {id:newId(), name:'ห้องใหม่', beds:2, pm:last.pm||0, pq:last.pq||0, ph:last.ph||0, nm:0, nq:0, nh:0};
   };
-  // a promo's residents / after-promo price for one room (after defaults to that room's 3-month price)
+  // a promo's residents, promo price and after-promo price for one room
+  // (after-promo price defaults to that room's 3-month price)
   const promoRoom = (p, r) => {
     const e = p.rooms[r.id] || {};
-    return {n: e.n || 0, after: e.after != null ? e.after : r.pq};
+    return {n: e.n || 0, price: e.price || 0, after: e.after != null ? e.after : r.pq};
   };
   const int = x => Math.round(num(x));
 
@@ -71,16 +72,21 @@
       pm:num(r.pm), pq:num(r.pq), ph:num(r.ph), nm:int(r.nm), nq:int(r.nq), nh:int(r.nh)}));
     s.fixed = Array.isArray(s.fixed) ? s.fixed.map(x => ({name:String(x.name||''), amount:num(x.amount)})) : clone(DEFAULTS.fixed);
     s.promos = Array.isArray(s.promos) ? s.promos.map(p => {
-      let rooms = p.rooms && typeof p.rooms === 'object' ? p.rooms
+      const rooms = p.rooms && typeof p.rooms === 'object' ? p.rooms
         : {r6:{n:p.n6, after:p.after6}, r4:{n:p.n4, after:p.after4}};
       const clean = {};
       for (const id in rooms){
         const e = rooms[id] || {};
         clean[id] = {n:int(e.n)};
         if (e.after != null) clean[id].after = num(e.after);
+        if (e.price != null) clean[id].price = num(e.price);
       }
-      return {name:String(p.name||''), price:num(p.price), months:int(p.months), prepaid:p.prepaid !== false,
-        limit:int(p.limit), rooms:clean};
+      // older saves had one promo price for every room
+      if (p.price != null) s.rooms.forEach(r => {
+        const e = clean[r.id] || (clean[r.id] = {n:0});
+        if (e.price == null) e.price = num(p.price);
+      });
+      return {name:String(p.name||''), months:int(p.months), prepaid:p.prepaid !== false, limit:int(p.limit), rooms:clean};
     }) : clone(DEFAULTS.promos);
     return s;
   }
@@ -373,15 +379,15 @@
           '<input type="text" data-list="promos" data-i="' + i + '" data-f="name" value="' + esc(p.name) + '" placeholder="ชื่อโปร" aria-label="ชื่อโปร">' +
           '<button type="button" class="icon-btn" data-del="promos" data-i="' + i + '" title="ลบโปร" aria-label="ลบโปร">×</button>' +
         '</div>' +
-        '<div class="row"><label>ราคาโปร / เดือน</label>' + inp(i,'price',p.price,100,'ราคาโปรต่อเดือน') + '</div>' +
         '<div class="row"><label>ระยะเวลาโปร (เดือน)</label>' + inp(i,'months',p.months,1,'ระยะเวลาโปร') + '</div>' +
         '<label class="chk"><input type="checkbox" data-list="promos" data-i="' + i + '" data-f="prepaid"' + (p.prepaid ? ' checked' : '') + '> จ่ายล่วงหน้าทั้งก้อน</label>' +
         '<div class="row"><label>จำกัดจำนวนเตียง<small>0 = ไม่จำกัด</small></label>' + inp(i,'limit',p.limit,1,'จำกัดจำนวนเตียง') + '</div>' +
-        (state.rooms.length ? '<div class="matrix two">' +
-          '<span></span><span class="h">ผู้พักราคาโปร (คน)</span><span class="h">ราคาหลังหมดโปร</span>' +
+        (state.rooms.length ? '<div class="matrix">' +
+          '<span></span><span class="h">ราคาโปร / เดือน</span><span class="h">ผู้พักโปร (คน)</span><span class="h">หลังหมดโปร</span>' +
           state.rooms.map((r, ri) => {
             const e = promoRoom(p, r);
             return '<span class="l">' + esc(roomName(r, ri)) + '</span>' +
+              numIn('promos', i, 'price', e.price, 100, 'ราคาโปร ' + roomName(r, ri), r.id) +
               numIn('promos', i, 'n', e.n, 1, 'ผู้พักโปร ' + roomName(r, ri), r.id) +
               numIn('promos', i, 'after', e.after, 100, 'ราคาหลังหมดโปร ' + roomName(r, ri), r.id);
           }).join('') +
@@ -457,7 +463,7 @@
     const out = [];
     v.promos.forEach(p => {
       const months = p.prepaid ? p.months : 0;
-      v.rooms.forEach((r, ri) => out.push({name:p.name || 'โปร', room:roomName(r, ri), n:promoRoom(p, r).n, price:p.price, months, promo:true}));
+      v.rooms.forEach((r, ri) => out.push({name:p.name || 'โปร', room:roomName(r, ri), n:promoRoom(p, r).n, price:promoRoom(p, r).price, months, promo:true}));
     });
     v.rooms.forEach((r, ri) => {
       const room = roomName(r, ri);
@@ -544,13 +550,13 @@
     }
 
     // promo vs after
-    const revAfter = revenue + v.promos.reduce((s,p)=>s + v.rooms.reduce((a,r)=>{ const e = promoRoom(p, r); return a + e.n*(e.after - p.price); }, 0), 0);
+    const revAfter = revenue + v.promos.reduce((s,p)=>s + v.rooms.reduce((a,r)=>{ const e = promoRoom(p, r); return a + e.n*(e.after - e.price); }, 0), 0);
     const mA = pnl(v, n, revAfter);
     const aft = [];
     v.promos.forEach(p => {
       const parts = [];
-      v.rooms.forEach((r, ri) => { const e = promoRoom(p, r); if (e.n) parts.push(roomName(r, ri) + ' ' + e.n + ' คน ต่อที่ ' + fmt(e.after)); });
-      if (parts.length) aft.push('"' + (p.name || 'โปร') + '" ' + fmt(p.price) + ' × ' + p.months + ' เดือน → ' + parts.join(', '));
+      v.rooms.forEach((r, ri) => { const e = promoRoom(p, r); if (e.n) parts.push(roomName(r, ri) + ' ' + e.n + ' คน ' + fmt(e.price) + ' → ' + fmt(e.after)); });
+      if (parts.length) aft.push('"' + (p.name || 'โปร') + '" ' + p.months + ' เดือน: ' + parts.join(', '));
     });
     $('cmpSub').textContent = nPromo
       ? aft.join(' · ') + ' บาท/เดือน ผู้พักคนอื่นจ่ายเท่าเดิม'
@@ -569,10 +575,18 @@
       cr('กำไรสุทธิ', m.net, mA.net, true, true);
 
     // price card
-    $('pcPromos').innerHTML = v.promos.map(p =>
-      '<div class="promo-strip"><span>' + esc(p.name || 'โปร') + (p.limit ? ' (' + p.limit + ' เตียง)' : '') + '</span><b class="num">' + fmt(p.price) + ' บาท/เดือน</b><span class="muted">' +
-        (p.prepaid && p.months ? 'จ่ายล่วงหน้า ' + p.months + ' เดือน ' + fmt(p.price*p.months) + ' บาท · ' : (p.months ? p.months + ' เดือนแรก · ' : '')) +
-        'หลังหมดโปร ' + esc(v.rooms.map((r, ri) => roomName(r, ri) + ' ' + fmt(promoRoom(p, r).after)).join(' / ')) + ' บาท/เดือน</span></div>').join('');
+    $('pcPromos').innerHTML = v.promos.map(p => {
+      const lines = v.rooms.map((r, ri) => {
+        const e = promoRoom(p, r);
+        if (!e.price) return '';
+        return '<li><span>' + esc(roomName(r, ri)) + '</span><b class="num">' + fmt(e.price) + ' บาท/เดือน</b><span class="muted">' +
+          (p.prepaid && p.months ? 'จ่ายล่วงหน้า ' + p.months + ' เดือน ' + fmt(e.price*p.months) + ' บาท · ' : '') +
+          'หลังหมดโปร ' + fmt(e.after) + ' บาท/เดือน</span></li>';
+      }).join('');
+      return '<div class="promo-strip"><div class="ps-head">' + esc(p.name || 'โปร') + (p.limit ? ' (' + p.limit + ' เตียง)' : '') +
+        (p.months ? ' · ' + p.months + ' เดือนแรก' : '') + '</div>' +
+        (lines ? '<ul class="ps-rooms">' + lines + '</ul>' : '<span class="muted">ยังไม่ได้ใส่ราคาโปร</span>') + '</div>';
+    }).join('');
     const dl = (mo, q, h) =>
       '<dt>รายเดือน</dt><dd>' + fmt(mo) + '</dd>' +
       '<dt>จ่ายล่วงหน้า 3 เดือน</dt><dd>' + fmt(q) + '<span>รวม ' + fmt(q*3) + (mo>q ? ' · ประหยัด ' + fmt((mo-q)*3) : '') + '</span></dd>' +
