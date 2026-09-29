@@ -18,6 +18,7 @@
     nCare1:5, nCare2:0,
     staffN:4, staffSal:15000,
     food:4500, otherPct:5,
+    cardShare:0, cardFee:1.6,
     tax:20, invest:2000000
   };
   const INT_KEYS = ['nCare1','nCare2','staffN'];
@@ -57,6 +58,9 @@
     return {n: e.n || 0, price: e.price || 0, after: r['p' + p.afterPlan] || 0};
   };
   const int = x => Math.round(num(x));
+  const VAT = 0.07;
+  // card fees as a share of total revenue: part paid by card × MDR, plus VAT on the fee
+  const cardRate = v => Math.min(v.cardShare, 100)/100 * v.cardFee/100 * (1 + VAT);
 
   function normalize(d){
     d = d || {};
@@ -504,6 +508,7 @@
     const fixed = fixedItems.reduce((s,x)=>s+x[1],0);
     const varItems = [['ค่าอาหาร', v.food*n]];
     varItems.push(['อื่นๆ '+v.otherPct+'% ของรายได้', revenue*v.otherPct/100]);
+    if (cardRate(v)) varItems.push(['ค่าธรรมเนียมบัตรเครดิต (รูด '+Math.min(v.cardShare, 100)+'% × '+v.cardFee+'% + VAT)', revenue*cardRate(v)]);
     const variable = varItems.reduce((s,x)=>s+x[1],0);
     const total = fixed + variable;
     const ebit = revenue - total;
@@ -523,11 +528,14 @@
     const cash = P.reduce((s,p)=>s+p.n*p.price*p.months,0);
     const m = pnl(v, n, revenue);
     const avg = n ? revenue/n : 0;
-    const pctO = v.otherPct/100;
+    const pctO = v.otherPct/100 + cardRate(v);
     const contrib = avg*(1-pctO) - v.food;
     const be = contrib > 0 ? m.fixed/contrib : Infinity;
     const minAvg = n && pctO < 1 ? (m.fixed/n + v.food)/(1-pctO) : Infinity;
 
+    $('cardNote').textContent = cardRate(v)
+      ? 'คิดเป็น ' + (cardRate(v)*100).toFixed(2) + '% ของรายได้รวม ≈ ' + fmt(revenue*cardRate(v)) + ' บาท/เดือน' + (cash ? ' · รูดเงินล่วงหน้าทั้งก้อนจะโดนหักครั้งเดียว ≈ ' + fmt(cash*cardRate(v)) + ' บาท' : '')
+      : 'ใส่ % ที่ลูกค้ารูดบัตร เพื่อหักค่าธรรมเนียมออกจากกำไร';
     $('fixedSum').textContent = fmt(v.fixed.reduce((s,f)=>s+f.amount,0)) + ' บาท';
 
     // occupancy note
