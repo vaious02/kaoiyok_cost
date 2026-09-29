@@ -18,7 +18,7 @@
     nCare1:5, nCare2:0,
     staffN:4, staffSal:15000,
     food:4500, otherPct:5,
-    cardShare:0, cardFee:1.6,
+    cardFee:1.6, inst3:3, inst6:5, inst10:7,
     tax:20, invest:2000000
   };
   const INT_KEYS = ['nCare1','nCare2','staffN'];
@@ -40,11 +40,12 @@
       {name:'การตลาดและโปรโมท', amount:20000}
     ],
     promos: [
-      {name:'โปรเปิดศูนย์', months:3, prepaid:true, limit:3, afterPlan:'q', rooms:{r6:{n:3, price:19900}, r4:{n:0, price:19900}}}
-    ]
+      {id:'p1', name:'โปรเปิดศูนย์', months:3, prepaid:true, limit:3, afterPlan:'q', rooms:{r6:{n:3, price:19900}, r4:{n:0, price:19900}}}
+    ],
+    pay: {}   // per-resident payment: {'<group>#<k>': {m:'card', name:'คุณสมศรี'}}
   });
   const NEW_FIXED = () => ({name:'', amount:0});
-  const NEW_PROMO = () => ({name:'โปรใหม่', months:3, prepaid:true, limit:0, afterPlan:'q', rooms:{}});
+  const NEW_PROMO = () => ({id:newId(), name:'โปรใหม่', months:3, prepaid:true, limit:0, afterPlan:'q', rooms:{}});
   // which normal room price promo residents continue on after the promo ends
   const AFTER_PLANS = {m:'รายเดือน', q:'จ่ายล่วงหน้า 3 เดือน', h:'จ่ายล่วงหน้า 6 เดือน'};
   const NEW_ROOM = () => {
@@ -59,8 +60,9 @@
   };
   const int = x => Math.round(num(x));
   const VAT = 0.07;
-  // card fees as a share of total revenue: part paid by card × MDR, plus VAT on the fee
-  const cardRate = v => Math.min(v.cardShare, 100)/100 * v.cardFee/100 * (1 + VAT);
+  const PAY_METHODS = {cash:'โอน / เงินสด', card:'รูดบัตรเครดิต', i3:'ผ่อน 0% 3 เดือน', i6:'ผ่อน 0% 6 เดือน', i10:'ผ่อน 0% 10 เดือน'};
+  // fee the bank keeps per baht charged, VAT on the fee included
+  const payRate = (v, m) => ({card:v.cardFee, i3:v.inst3, i6:v.inst6, i10:v.inst10}[m] || 0)/100 * (1 + VAT);
 
   function normalize(d){
     d = d || {};
@@ -97,8 +99,15 @@
         const e = clean[r.id] || (clean[r.id] = {n:0});
         if (e.price == null) e.price = num(p.price);
       });
-      return {name:String(p.name||''), months:int(p.months), prepaid:p.prepaid !== false, limit:int(p.limit), afterPlan, rooms:clean};
+      return {id:String(p.id || newId()), name:String(p.name||''), months:int(p.months), prepaid:p.prepaid !== false, limit:int(p.limit), afterPlan, rooms:clean};
     }) : clone(DEFAULTS.promos);
+    const pay = {};
+    if (s.pay && typeof s.pay === 'object') for (const k in s.pay){
+      const e = s.pay[k] || {};
+      pay[k] = {m: PAY_METHODS[e.m] ? e.m : 'cash', name: String(e.name || '')};
+    }
+    s.pay = pay;
+    delete s.cardShare;
     return s;
   }
 
@@ -336,6 +345,7 @@
     renderResidents();
     renderFixedList();
     renderPromoList();
+    renderPayList();
     render();
   }
 
@@ -409,9 +419,25 @@
       '</div>').join('') : '<p class="empty">ยังไม่มีโปร กด "+ เพิ่มโปร"</p>';
   }
 
+  function renderPayList(){
+    const ppl = people(state);
+    $('payList').innerHTML = ppl.length ? ppl.map((x, i) =>
+      '<div class="payitem">' +
+        '<span class="who-l">' + (i + 1) + '. ' + esc(x.room) + '<small>' + esc(x.plan) + ' · ' + fmt(x.price) + ' บาท/เดือน' + (x.months ? ' (รวม ' + fmt(x.price * x.months) + ')' : '') + '</small></span>' +
+        '<input type="text" data-pay="' + esc(x.key) + '" data-f="name" value="' + esc(x.name) + '" placeholder="ชื่อผู้พัก (ไม่ใส่ก็ได้)" aria-label="ชื่อผู้พักคนที่ ' + (i + 1) + '">' +
+        '<select data-pay="' + esc(x.key) + '" data-f="m" aria-label="วิธีจ่ายของผู้พักคนที่ ' + (i + 1) + '">' +
+          Object.keys(PAY_METHODS).filter(k => x.months || k[0] !== 'i')
+            .map(k => '<option value="' + k + '"' + (x.m === k ? ' selected' : '') + '>' + PAY_METHODS[k] + '</option>').join('') +
+        '</select>' +
+      '</div>').join('') : '<p class="empty">ยังไม่มีผู้พัก ใส่จำนวนผู้พักด้านบนก่อน</p>';
+  }
+
   $('form').addEventListener('input', e => {
     const t = e.target;
-    if (t.dataset.list){
+    if (t.dataset.pay){
+      const e2 = state.pay[t.dataset.pay] || (state.pay[t.dataset.pay] = {m:'cash', name:''});
+      e2[t.dataset.f] = t.value;
+    } else if (t.dataset.list){
       const list = t.dataset.list, f = t.dataset.f;
       let item = state[list][+t.dataset.i];
       if (!item) return;
@@ -427,6 +453,8 @@
       if (list === 'rooms' && f === 'name'){ renderResidents(); renderPromoList(); }
       // after-promo hints follow the plan choice and the rooms' normal prices
       if ((list === 'promos' && f === 'afterPlan') || (list === 'rooms' && /^p[mqh]$/.test(f))) refreshAfterHints();
+      // the per-resident payment list follows resident counts, names and prices
+      if (list !== 'fixed') renderPayList();
     } else if (t.id in SCALARS){
       state[t.id] = INT_KEYS.includes(t.id) ? Math.round(num(t.value)) : num(t.value);
     } else return;
@@ -455,6 +483,7 @@
       renderRoomList(); renderResidents(); renderPromoList();
     } else if (list === 'fixed') renderFixedList();
     else renderPromoList();
+    if (list !== 'fixed') renderPayList();
     render(); scheduleSave();
   });
   $('addFixed').addEventListener('click', () => {
@@ -488,27 +517,41 @@
     const out = [];
     v.promos.forEach(p => {
       const months = p.prepaid ? p.months : 0;
-      v.rooms.forEach((r, ri) => out.push({name:p.name || 'โปร', room:roomName(r, ri), n:promoRoom(p, r).n, price:promoRoom(p, r).price, months, promo:true}));
+      v.rooms.forEach((r, ri) => out.push({key:p.id + ':' + r.id, name:p.name || 'โปร', room:roomName(r, ri), n:promoRoom(p, r).n, price:promoRoom(p, r).price, after:promoRoom(p, r).after, months, promo:true}));
     });
     v.rooms.forEach((r, ri) => {
       const room = roomName(r, ri);
       out.push(
-        {name:'รายเดือน', room, n:r.nm, price:r.pm, months:0},
-        {name:'ล่วงหน้า 3 เดือน', room, n:r.nq, price:r.pq, months:3},
-        {name:'ล่วงหน้า 6 เดือน', room, n:r.nh, price:r.ph, months:6}
+        {key:r.id + ':m', name:'รายเดือน', room, n:r.nm, price:r.pm, months:0},
+        {key:r.id + ':q', name:'ล่วงหน้า 3 เดือน', room, n:r.nq, price:r.pq, months:3},
+        {key:r.id + ':h', name:'ล่วงหน้า 6 เดือน', room, n:r.nh, price:r.ph, months:6}
       );
     });
     return out;
   }
 
-  // generic P&L for n residents with given total revenue
-  function pnl(v, n, revenue){
+  // one entry per resident with their payment method; a monthly payer can't be on a 0% plan, so that falls back to card
+  function people(v){
+    const out = [];
+    plans(v).forEach(p => {
+      for (let k = 0; k < p.n; k++){
+        const key = p.key + '#' + k, e = v.pay[key] || {};
+        let m = PAY_METHODS[e.m] ? e.m : 'cash';
+        if (!p.months && m[0] === 'i') m = 'card';
+        out.push({key, room:p.room, plan:p.name + (p.promo ? ' (โปร)' : ''), price:p.price, after:p.promo ? p.after : p.price, months:p.months, name:e.name || '', m});
+      }
+    });
+    return out;
+  }
+
+  // generic P&L for n residents with given total revenue; feeRate = card / 0% fees as a share of revenue
+  function pnl(v, n, revenue, feeRate){
     const fixedItems = [['เงินเดือนพนักงานดูแล (' + v.staffN + ' คน)', v.staffN * v.staffSal]]
       .concat(v.fixed.map((f, i) => [f.name || ('รายการที่ ' + (i+1)), f.amount]));
     const fixed = fixedItems.reduce((s,x)=>s+x[1],0);
     const varItems = [['ค่าอาหาร', v.food*n]];
     varItems.push(['อื่นๆ '+v.otherPct+'% ของรายได้', revenue*v.otherPct/100]);
-    if (cardRate(v)) varItems.push(['ค่าธรรมเนียมบัตรเครดิต (รูด '+Math.min(v.cardShare, 100)+'% × '+v.cardFee+'% + VAT)', revenue*cardRate(v)]);
+    if (feeRate) varItems.push(['ค่าธรรมเนียมบัตรเครดิต / ผ่อน 0% (รวม VAT)', revenue*feeRate]);
     const variable = varItems.reduce((s,x)=>s+x[1],0);
     const total = fixed + variable;
     const ebit = revenue - total;
@@ -526,16 +569,23 @@
     const careRev = care1 * v.pCare1 + care2 * v.pCare2;
     const revenue = roomRev + careRev;
     const cash = P.reduce((s,p)=>s+p.n*p.price*p.months,0);
-    const m = pnl(v, n, revenue);
+    // payment fees per resident; a prepaid charge is taken once, which averages to price × rate a month
+    const ppl = people(v);
+    const fee = ppl.reduce((s,x)=>s + x.price*payRate(v, x.m), 0);
+    const feeUpfront = ppl.reduce((s,x)=>s + x.price*x.months*payRate(v, x.m), 0);
+    const fr = revenue ? fee/revenue : 0;
+    const m = pnl(v, n, revenue, fr);
     const avg = n ? revenue/n : 0;
-    const pctO = v.otherPct/100 + cardRate(v);
+    const pctO = v.otherPct/100 + fr;
     const contrib = avg*(1-pctO) - v.food;
     const be = contrib > 0 ? m.fixed/contrib : Infinity;
     const minAvg = n && pctO < 1 ? (m.fixed/n + v.food)/(1-pctO) : Infinity;
 
-    $('cardNote').textContent = cardRate(v)
-      ? 'คิดเป็น ' + (cardRate(v)*100).toFixed(2) + '% ของรายได้รวม ≈ ' + fmt(revenue*cardRate(v)) + ' บาท/เดือน' + (cash ? ' · รูดเงินล่วงหน้าทั้งก้อนจะโดนหักครั้งเดียว ≈ ' + fmt(cash*cardRate(v)) + ' บาท' : '')
-      : 'ใส่ % ที่ลูกค้ารูดบัตร เพื่อหักค่าธรรมเนียมออกจากกำไร';
+    const nCard = ppl.filter(x => x.m === 'card').length, nInst = ppl.filter(x => x.m[0] === 'i').length;
+    $('cardNote').textContent = !ppl.length ? 'ค่าธรรมเนียมคิดจากค่าห้อง (ค่าดูแลติดเตียงยังไม่นับ)'
+      : fee ? 'โอน/เงินสด ' + (ppl.length - nCard - nInst) + ' คน · รูดบัตร ' + nCard + ' คน · ผ่อน 0% ' + nInst + ' คน · ค่าธรรมเนียม ≈ ' + fmt(fee) + ' บาท/เดือน (' + (fr*100).toFixed(2) + '% ของรายได้)' +
+          (feeUpfront ? ' · เงินล่วงหน้าที่รูดหรือผ่อนโดนหักครั้งเดียว ≈ ' + fmt(feeUpfront) + ' บาท' : '') + ' · คิดจากค่าห้อง ค่าดูแลติดเตียงยังไม่นับ'
+      : 'ทุกคนจ่ายโอน / เงินสด ไม่มีค่าธรรมเนียม เลือกวิธีจ่ายของแต่ละคนได้ด้านบน';
     $('fixedSum').textContent = fmt(v.fixed.reduce((s,f)=>s+f.amount,0)) + ' บาท';
 
     // occupancy note
@@ -579,7 +629,8 @@
 
     // promo vs after
     const revAfter = revenue + v.promos.reduce((s,p)=>s + v.rooms.reduce((a,r)=>{ const e = promoRoom(p, r); return a + e.n*(e.after - e.price); }, 0), 0);
-    const mA = pnl(v, n, revAfter);
+    const feeAfter = ppl.reduce((s,x)=>s + x.after*payRate(v, x.m), 0);
+    const mA = pnl(v, n, revAfter, revAfter ? feeAfter/revAfter : 0);
     const aft = [];
     v.promos.forEach(p => {
       const parts = [];
@@ -655,7 +706,7 @@
 
     // occupancy
     const rows = [];
-    for (let b = 1; b <= cap; b++) rows.push([b, pnl(v, b, avg*b)]);
+    for (let b = 1; b <= cap; b++) rows.push([b, pnl(v, b, avg*b, fr)]);
     const mx = Math.max(...rows.map(x => Math.abs(x[1].net)), 1);
     $('occ').innerHTML = avg ? rows.map(([b, q]) => {
       const w = (Math.abs(q.net)/mx*50).toFixed(1);

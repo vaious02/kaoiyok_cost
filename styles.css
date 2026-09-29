@@ -159,6 +159,10 @@ input[type=text]:focus,input[type=email]:focus,input[type=password]:focus,select
 /* editable lists */
 .items{display:grid;gap:8px}
 .item{display:grid;grid-template-columns:minmax(0,1fr) 120px 30px;gap:8px;align-items:center}
+.payitem{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 150px;gap:8px;align-items:center;font-size:13.5px}
+.payitem small{display:block;color:var(--ink-3);font-size:12px}
+.payitem select{width:100%;padding:6px 8px;font-size:13.5px}
+@media (max-width:520px){.payitem{grid-template-columns:minmax(0,1fr) 150px}.payitem .who-l{grid-column:1 / -1}}
 .icon-btn{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink-3);padding:0;font-size:16px;line-height:1}
 .icon-btn:hover{border-color:var(--bad);color:var(--bad)}
 .addbtn{justify-self:start;border:1px dashed var(--accent);background:transparent;color:var(--accent);padding:6px 12px;border-radius:8px;font-size:13.5px}

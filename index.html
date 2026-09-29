@@ -92,9 +92,12 @@
       </fieldset>
 
       <fieldset>
-        <legend>ค่าธรรมเนียมบัตรเครดิต</legend>
-        <div class="row"><label for="cardShare">รายได้ที่ลูกค้ารูดบัตร<small>% ของรายได้ทั้งหมด ที่เหลือโอน / เงินสด</small></label><input id="cardShare" type="number" step="5" min="0" max="100"></div>
-        <div class="row"><label for="cardFee">ค่าธรรมเนียม (MDR) %<small>ธนาคารบวก VAT 7% ของค่าธรรมเนียมให้อัตโนมัติ</small></label><input id="cardFee" type="number" step="0.05" min="0"></div>
+        <legend>วิธีจ่ายเงินของผู้พักแต่ละคน</legend>
+        <div class="row"><label for="cardFee">รูดบัตร: ค่าธรรมเนียม (MDR) %<small>ธนาคารบวก VAT 7% ของค่าธรรมเนียมให้อัตโนมัติ</small></label><input id="cardFee" type="number" step="0.05" min="0"></div>
+        <div class="row"><label for="inst3">ผ่อน 0% 3 เดือน: ร้านจ่าย %</label><input id="inst3" type="number" step="0.1" min="0"></div>
+        <div class="row"><label for="inst6">ผ่อน 0% 6 เดือน: ร้านจ่าย %</label><input id="inst6" type="number" step="0.1" min="0"></div>
+        <div class="row"><label for="inst10">ผ่อน 0% 10 เดือน: ร้านจ่าย %</label><input id="inst10" type="number" step="0.1" min="0"></div>
+        <div class="items" id="payList"></div>
         <div class="note num" id="cardNote"></div>
       </fieldset>
 
@@ -187,7 +190,7 @@
             <div><b>รายได้ค่าดูแล</b><code>ผู้ป่วยติดเตียง × ค่าดูแลติดเตียง + ผู้ป่วยมีสาย × ค่าดูแลผู้ป่วยมีสาย</code></div>
             <div><b>รายได้รวม</b><code>รายได้ค่าห้อง + รายได้ค่าดูแล</code></div>
             <div><b>ต้นทุนคงที่</b><code>(พนักงาน × เงินเดือน) + Σ รายการต้นทุนคงที่ที่เพิ่มเอง</code></div>
-            <div><b>ค่าธรรมเนียมบัตร</b><code>รายได้รวม × % ที่รูดบัตร × MDR % × 1.07 (VAT)</code></div>
+            <div><b>ค่าธรรมเนียมบัตร</b><code>Σ ผู้พักที่รูดบัตรหรือผ่อน × ค่าห้อง/เดือน × (MDR % หรือ % ผ่อน 0%) × 1.07 (VAT) · จ่ายล่วงหน้าโดนหักครั้งเดียวจากยอดทั้งก้อน เฉลี่ยแล้วเท่ากับต่อเดือน</code></div>
             <div><b>ต้นทุนผันแปร</b><code>ผู้พัก × อาหาร + อื่นๆ % × รายได้รวม + ค่าธรรมเนียมบัตร</code></div>
             <div><b>ต้นทุน / ผู้พัก</b><code>(ต้นทุนคงที่ + ต้นทุนผันแปร) ÷ จำนวนผู้พัก</code></div>
             <div><b>EBIT</b><code>รายได้รวม − ต้นทุนคงที่ − ต้นทุนผันแปร</code></div>
